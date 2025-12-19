@@ -1,96 +1,123 @@
 import React, { createContext, useEffect, useState } from "react";
+import api from "../api";
 
 export const ShopContext = createContext(null);
 
+// 🔹 Default empty cart
 const getDefaultCart = () => {
   let cart = {};
-
-  for (let i = 0; i < 300 + 1; i++) {
+  for (let i = 0; i <= 300; i++) {
     cart[i] = 0;
   }
-
   return cart;
 };
 
 const ShopContextProvider = (props) => {
   const [all_product, setAll_Product] = useState([]);
   const [cartItems, setCartItems] = useState(getDefaultCart());
+
+  // 🔥 FETCH PRODUCTS + CART (BACKEND CALLS)
   useEffect(() => {
-    fetch("http://localhost:4000/allproducts")
-      .then((response) => response.json())
-      .then((data) => setAll_Product(data));
-    if (localStorage.getItem("auth-token")) {
-      fetch("http://localhost:4000/getcart", {
-        method: "POST",
-        headers: {
-          Accept: "application/form-data",
-          "auth-token": `${localStorage.getItem("auth-token")}`,
-          "Content-Type": "application/json",
-        },
-        body: "",
-      })
-        .then((response) => response.json())
-        .then((data) => setCartItems(data));
-    }
+    const fetchProducts = async () => {
+      try {
+        const res = await api.get("/allproducts");
+        setAll_Product(res.data);
+      } catch (error) {
+        console.log("Error fetching products:", error);
+      }
+    };
+
+    const fetchCart = async () => {
+      if (localStorage.getItem("auth-token")) {
+        try {
+          const res = await api.post(
+            "/getcart",
+            {},
+            {
+              headers: {
+                "auth-token": localStorage.getItem("auth-token"),
+              },
+            }
+          );
+          setCartItems(res.data);
+        } catch (error) {
+          console.log("Error fetching cart:", error);
+        }
+      }
+    };
+
+    fetchProducts(); // ✅ function call
+    fetchCart(); // ✅ function call
   }, []);
 
+  // 🔹 Save cart to localStorage
   useEffect(() => {
     localStorage.setItem("cartItems", JSON.stringify(cartItems));
   }, [cartItems]);
 
-  const addToCart = (itemId) => {
+  // 🔹 Add to cart
+  const addToCart = async (itemId) => {
     setCartItems((prev) => ({
       ...prev,
       [itemId]: (prev[itemId] || 0) + 1,
     }));
+
     if (localStorage.getItem("auth-token")) {
-      fetch("http://localhost:4000/addtocart", {
-        method: "POST",
-        headers: {
-          Accept: "application/form-data",
-          "auth-token": `${localStorage.getItem("auth-token")}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ itemId: itemId }),
-      })
-        .then((response) => response.json())
-        .then((data) => console.log(data));
+      try {
+        await api.post(
+          "/addtocart",
+          { itemId },
+          {
+            headers: {
+              "auth-token": localStorage.getItem("auth-token"),
+            },
+          }
+        );
+      } catch (error) {
+        console.log("Add to cart error:", error);
+      }
     }
   };
 
-  const removeFromCart = (itemId) => {
+  // 🔹 Remove from cart
+  const removeFromCart = async (itemId) => {
     setCartItems((prev) => ({
       ...prev,
       [itemId]: Math.max(prev[itemId] - 1, 0),
     }));
+
     if (localStorage.getItem("auth-token")) {
-      fetch("http://localhost:4000/removefromcart", {
-        method: "POST",
-        headers: {
-          Accept: "application/form-data",
-          "auth-token": `${localStorage.getItem("auth-token")}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ itemId: itemId }),
-      })
-        .then((response) => response.json())
-        .then((data) => console.log(data));
+      try {
+        await api.post(
+          "/removefromcart",
+          { itemId },
+          {
+            headers: {
+              "auth-token": localStorage.getItem("auth-token"),
+            },
+          }
+        );
+      } catch (error) {
+        console.log("Remove from cart error:", error);
+      }
     }
   };
 
+  // 🔹 Total price
   const getTotalCartAmount = () => {
     let totalAmount = 0;
-
     for (const item in cartItems) {
       if (cartItems[item] > 0) {
-        let product = all_product.find((p) => p.id === Number(item));
-        totalAmount += product.new_price * cartItems[item];
+        const product = all_product.find((p) => p.id === Number(item));
+        if (product) {
+          totalAmount += product.new_price * cartItems[item];
+        }
       }
     }
-
     return totalAmount;
   };
 
+  // 🔹 Total items count
   const gettotalCartItems = () => {
     let totalItem = 0;
     for (const item in cartItems) {
@@ -102,12 +129,12 @@ const ShopContextProvider = (props) => {
   };
 
   const contextValue = {
-    gettotalCartItems,
-    getTotalCartAmount,
     all_product,
     cartItems,
     addToCart,
     removeFromCart,
+    getTotalCartAmount,
+    gettotalCartItems,
   };
 
   return (
